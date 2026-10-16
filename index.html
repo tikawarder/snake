@@ -7,13 +7,22 @@
 <style>
   body { margin: 0; background: #1b1b1b; color: #eee; font: 16px sans-serif; text-align: center; }
   canvas { background: #111; border: 2px solid #444; margin-top: 10px; max-width: 95vw; }
+  #pad { display: none; margin: 8px auto; width: 260px; touch-action: none; user-select: none; }
+  #pad button { font-size: 28px; width: 80px; height: 64px; margin: 3px; border: 0; border-radius: 10px; background: #444; color: #eee; touch-action: none; }
+  #pad .wide { width: 123px; font-size: 18px; }
+  @media (pointer: coarse) { #pad { display: block; } .keys { display: none; } }
   #info { margin: 8px; }
 </style>
 </head>
 <body>
 <div id="info"></div>
 <canvas id="c" width="400" height="400"></canvas>
-<p>Nyilak: irányítás · Space: indítás / újraindítás (játék közben nem hat) · Esc: kilépés az 1. pályára</p>
+<div id="pad">
+  <div><button data-k="ArrowUp">▲</button></div>
+  <div><button data-k="ArrowLeft">◀</button><button data-k="ArrowDown">▼</button><button data-k="ArrowRight">▶</button></div>
+  <div><button class="wide" data-k="start">Start</button><button class="wide" data-k="quit">Kilépés</button></div>
+</div>
+<p class="keys">Nyilak: irányítás · Space: indítás / újraindítás (játék közben nem hat) · Esc: kilépés az 1. pályára</p>
 <script>
 const N = 20, S = 20;                 // rács: 20x20 mező, 20 px/mező
 const ctx = document.getElementById('c').getContext('2d');
@@ -104,20 +113,30 @@ function draw() {
 }
 
 const KEYS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+
+// közös műveletek: billentyűzet és érintőgombok is ezeket hívják
+function turn(d) {
+  if (d[0] !== -dir[0] || d[1] !== -dir[1]) nextDir = d; // nem fordulhat vissza
+  if (state === 'ready') run();
+}
+function action() { // Space / Start gomb
+  if (state === 'ready') run();
+  else if (state === 'over' || state === 'won') start(state === 'won' ? 0 : level);
+}
+const quit = () => start(0); // Esc / Kilépés gomb
+
 addEventListener('keydown', e => {
-  if (e.key === 'Escape') start(0); // kilépés: vissza az 1. pálya kezdőképére
-  if (e.code === 'Space') {
-    e.preventDefault();
-    if (state === 'ready') run();
-    else if (state === 'over' || state === 'won') start(state === 'won' ? 0 : level);
-  }
-  const d = KEYS[e.key];
-  if (d) {
-    e.preventDefault();
-    if (d[0] !== -dir[0] || d[1] !== -dir[1]) nextDir = d; // nem fordulhat vissza
-    if (state === 'ready') run();
-  }
+  if (e.key === 'Escape') quit();
+  else if (e.code === 'Space') { e.preventDefault(); action(); }
+  else if (KEYS[e.key]) { e.preventDefault(); turn(KEYS[e.key]); }
 });
+
+// érintőgombok: data-k = nyíl neve / start / quit
+document.querySelectorAll('#pad button').forEach(b => b.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const k = b.dataset.k;
+  if (k === 'start') action(); else if (k === 'quit') quit(); else turn(KEYS[k]);
+}));
 
 start(0);
 </script>
