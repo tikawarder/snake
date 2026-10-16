@@ -13,7 +13,7 @@
 <body>
 <div id="info"></div>
 <canvas id="c" width="400" height="400"></canvas>
-<p>Nyilak: irányítás · Space: indítás / újraindítás</p>
+<p>Nyilak: irányítás · Space: indítás / újraindítás (játék közben nem hat) · Esc: kilépés az 1. pályára</p>
 <script>
 const N = 20, S = 20;                 // rács: 20x20 mező, 20 px/mező
 const ctx = document.getElementById('c').getContext('2d');
@@ -31,20 +31,27 @@ const LEVELS = [
   { speed: 90,  goal: 10, walls: [...hline(10, 2, 8), ...hline(10, 11, 17), ...vline(10, 2, 8), ...vline(10, 11, 17)] },
 ];
 
-let level, snake, dir, nextDir, apple, eaten, timer, state; // state: ready | run | over | won
+let level, snake, dir, nextDir, apples, eaten, timer, state; // state: ready | run | over | won
 
 function wall(x, y) { return LEVELS[level].walls.some(w => w[0] === x && w[1] === y); }
 function onSnake(x, y) { return snake.some(s => s[0] === x && s[1] === y); }
 
-function placeApple() {
-  do { apple = [Math.floor(Math.random() * N), Math.floor(Math.random() * N)]; }
-  while (onSnake(...apple) || wall(...apple));
+const isApple = (x, y) => apples.some(a => a[0] === x && a[1] === y);
+
+// egyszerre max 4 alma: pályánként eggyel több (de legfeljebb 4, és a hátralévő almák számánál nem több)
+function fillApples() {
+  const want = Math.min(level + 1, 4, LEVELS[level].goal - eaten);
+  while (apples.length < want) {
+    const a = [Math.floor(Math.random() * N), Math.floor(Math.random() * N)];
+    if (!onSnake(...a) && !wall(...a) && !isApple(...a)) apples.push(a);
+  }
 }
 
 function start(lv) {
   level = lv; eaten = 0; dir = nextDir = [1, 0];
   snake = [[3, 2], [2, 2], [1, 2]];
-  placeApple();
+  apples = [];
+  fillApples();
   state = 'ready';
   clearInterval(timer);
   draw();
@@ -59,17 +66,18 @@ function run() {
 function step() {
   dir = nextDir;
   const head = [(snake[0][0] + dir[0] + N) % N, (snake[0][1] + dir[1] + N) % N]; // átfordul a szélen
-  const grow = head[0] === apple[0] && head[1] === apple[1];
+  const grow = isApple(...head);
   // a farok mozdul, ha nem nő, ezért azt nem számítjuk ütközésnek
   const body = grow ? snake : snake.slice(0, -1);
   if (wall(...head) || body.some(s => s[0] === head[0] && s[1] === head[1])) return end('over');
   snake.unshift(head);
   if (grow) {
     eaten++;
+    apples = apples.filter(a => a[0] !== head[0] || a[1] !== head[1]);
     if (eaten >= LEVELS[level].goal) {
       return level + 1 < LEVELS.length ? (start(level + 1), run()) : end('won');
     }
-    placeApple();
+    fillApples();
   } else snake.pop();
   draw();
 }
@@ -81,7 +89,7 @@ function draw() {
   ctx.fillStyle = '#777';
   LEVELS[level].walls.forEach(([x, y]) => ctx.fillRect(x * S, y * S, S, S));
   ctx.fillStyle = '#e33';
-  ctx.fillRect(apple[0] * S + 2, apple[1] * S + 2, S - 4, S - 4);
+  apples.forEach(a => ctx.fillRect(a[0] * S + 2, a[1] * S + 2, S - 4, S - 4));
   snake.forEach(([x, y], i) => {
     ctx.fillStyle = i ? '#3c3' : '#8f8';
     ctx.fillRect(x * S + 1, y * S + 1, S - 2, S - 2);
@@ -97,6 +105,7 @@ function draw() {
 
 const KEYS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 addEventListener('keydown', e => {
+  if (e.key === 'Escape') start(0); // kilépés: vissza az 1. pálya kezdőképére
   if (e.code === 'Space') {
     e.preventDefault();
     if (state === 'ready') run();
