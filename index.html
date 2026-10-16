@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kígyó</title>
+<style>
+  body { margin: 0; background: #1b1b1b; color: #eee; font: 16px sans-serif; text-align: center; }
+  canvas { background: #111; border: 2px solid #444; margin-top: 10px; max-width: 95vw; }
+  #info { margin: 8px; }
+</style>
+</head>
+<body>
+<div id="info"></div>
+<canvas id="c" width="400" height="400"></canvas>
+<p>Nyilak: irányítás · Space: indítás / újraindítás</p>
+<script>
+const N = 20, S = 20;                 // rács: 20x20 mező, 20 px/mező
+const ctx = document.getElementById('c').getContext('2d');
+const info = document.getElementById('info');
+
+// Pályák: speed = ms/lépés, goal = ennyi alma kell a továbblépéshez,
+// walls = falak (x,y) koordináták a generáló függvényből
+const hline = (y, x1, x2) => Array.from({length: x2 - x1 + 1}, (_, i) => [x1 + i, y]);
+const vline = (x, y1, y2) => Array.from({length: y2 - y1 + 1}, (_, i) => [x, y1 + i]);
+const LEVELS = [
+  { speed: 140, goal: 5,  walls: [] },
+  { speed: 125, goal: 6,  walls: [...hline(10, 4, 15)] },
+  { speed: 110, goal: 7,  walls: [...vline(5, 4, 15), ...vline(14, 4, 15)] },
+  { speed: 100, goal: 8,  walls: [...hline(5, 3, 16), ...hline(14, 3, 16)] },
+  { speed: 90,  goal: 10, walls: [...hline(10, 2, 8), ...hline(10, 11, 17), ...vline(10, 2, 8), ...vline(10, 11, 17)] },
+];
+
+let level, snake, dir, nextDir, apple, eaten, timer, state; // state: ready | run | over | won
+
+function wall(x, y) { return LEVELS[level].walls.some(w => w[0] === x && w[1] === y); }
+function onSnake(x, y) { return snake.some(s => s[0] === x && s[1] === y); }
+
+function placeApple() {
+  do { apple = [Math.floor(Math.random() * N), Math.floor(Math.random() * N)]; }
+  while (onSnake(...apple) || wall(...apple));
+}
+
+function start(lv) {
+  level = lv; eaten = 0; dir = nextDir = [1, 0];
+  snake = [[3, 2], [2, 2], [1, 2]];
+  placeApple();
+  state = 'ready';
+  clearInterval(timer);
+  draw();
+}
+
+function run() {
+  state = 'run';
+  clearInterval(timer);
+  timer = setInterval(step, LEVELS[level].speed);
+}
+
+function step() {
+  dir = nextDir;
+  const head = [(snake[0][0] + dir[0] + N) % N, (snake[0][1] + dir[1] + N) % N]; // átfordul a szélen
+  const grow = head[0] === apple[0] && head[1] === apple[1];
+  // a farok mozdul, ha nem nő, ezért azt nem számítjuk ütközésnek
+  const body = grow ? snake : snake.slice(0, -1);
+  if (wall(...head) || body.some(s => s[0] === head[0] && s[1] === head[1])) return end('over');
+  snake.unshift(head);
+  if (grow) {
+    eaten++;
+    if (eaten >= LEVELS[level].goal) {
+      return level + 1 < LEVELS.length ? (start(level + 1), run()) : end('won');
+    }
+    placeApple();
+  } else snake.pop();
+  draw();
+}
+
+function end(s) { state = s; clearInterval(timer); draw(); }
+
+function draw() {
+  ctx.clearRect(0, 0, N * S, N * S);
+  ctx.fillStyle = '#777';
+  LEVELS[level].walls.forEach(([x, y]) => ctx.fillRect(x * S, y * S, S, S));
+  ctx.fillStyle = '#e33';
+  ctx.fillRect(apple[0] * S + 2, apple[1] * S + 2, S - 4, S - 4);
+  snake.forEach(([x, y], i) => {
+    ctx.fillStyle = i ? '#3c3' : '#8f8';
+    ctx.fillRect(x * S + 1, y * S + 1, S - 2, S - 2);
+  });
+  info.textContent = `${level + 1}. pálya · alma: ${eaten}/${LEVELS[level].goal} · hossz: ${snake.length}`;
+  if (state !== 'run') {
+    ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(0, 0, N * S, N * S);
+    ctx.fillStyle = '#fff'; ctx.font = '22px sans-serif'; ctx.textAlign = 'center';
+    const msg = { ready: `${level + 1}. pálya – Space az indításhoz`, over: 'Vége! Space: újra', won: 'Nyertél! Space: újra' }[state];
+    ctx.fillText(msg, N * S / 2, N * S / 2);
+  }
+}
+
+const KEYS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (state === 'ready') run();
+    else if (state === 'over' || state === 'won') start(state === 'won' ? 0 : level);
+  }
+  const d = KEYS[e.key];
+  if (d) {
+    e.preventDefault();
+    if (d[0] !== -dir[0] || d[1] !== -dir[1]) nextDir = d; // nem fordulhat vissza
+    if (state === 'ready') run();
+  }
+});
+
+start(0);
+</script>
+</body>
+</html>
